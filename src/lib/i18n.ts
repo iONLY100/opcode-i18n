@@ -8,7 +8,7 @@ import zhCN from '@/locales/zh-CN.json';
 export const resources = {
   en: { translation: en },
   'zh-CN': { translation: zhCN },
-} as const;
+};
 
 export const supportedLanguages = [
   { code: 'en', name: 'English', nativeName: 'English' },
