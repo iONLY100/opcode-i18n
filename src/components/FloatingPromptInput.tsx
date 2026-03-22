@@ -12,7 +12,7 @@ import {
   Lightbulb,
   Cpu,
   Rocket,
-  
+
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { FilePicker } from "./FilePicker";
 import { SlashCommandPicker } from "./SlashCommandPicker";
 import { ImagePreview } from "./ImagePreview";
 import { type FileEntry, type SlashCommand } from "@/lib/api";
+import { useTranslation } from "react-i18next";
 
 // Conditional import for Tauri webview window
 let tauriGetCurrentWebviewWindow: any;
@@ -224,6 +225,7 @@ const FloatingPromptInputInner = (
   }: FloatingPromptInputProps,
   ref: React.Ref<FloatingPromptInputRef>,
 ) => {
+  const { t } = useTranslation();
   const [prompt, setPrompt] = useState("");
   const [selectedModel, setSelectedModel] = useState<"sonnet" | "opus">(defaultModel);
   const [selectedThinkingMode, setSelectedThinkingMode] = useState<ThinkingMode>("auto");
@@ -706,6 +708,16 @@ const FloatingPromptInputInner = (
         finalPrompt = `${finalPrompt}.\n\n${thinkingMode.phrase}.`;
       }
 
+      // Remove data URLs (base64 images) since they can't be sent as CLI arguments
+      // TODO: Implement proper image attachment support via --attach flag
+      const dataUrlRegex = /data:image\/[^;]+;base64,[^\s"']+/g;
+      const hadDataUrls = dataUrlRegex.test(finalPrompt);
+      finalPrompt = finalPrompt.replace(dataUrlRegex, '').trim();
+
+      if (hadDataUrls) {
+        console.log('[FloatingPromptInput] Removed data URLs from prompt, image attachment not yet supported');
+      }
+
       onSend(finalPrompt, selectedModel);
       setPrompt("");
       setEmbeddedImages([]);
@@ -868,8 +880,8 @@ const FloatingPromptInputInner = (
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium">Compose your prompt</h3>
-                <TooltipSimple content="Minimize" side="bottom">
+                <h3 className="text-sm font-medium">{t('floatingPrompt.composePrompt')}</h3>
+                <TooltipSimple content={t('floatingPrompt.minimize')} side="bottom">
                   <motion.div
                     whileTap={{ scale: 0.97 }}
                     transition={{ duration: 0.15 }}
@@ -902,7 +914,7 @@ const FloatingPromptInputInner = (
                 onCompositionStart={handleCompositionStart}
                 onCompositionEnd={handleCompositionEnd}
                 onPaste={handlePaste}
-                placeholder="Type your message..."
+                placeholder={t('floatingPrompt.typeMessage')}
                 className="min-h-[200px] resize-none"
                 disabled={disabled}
                 onDragEnter={handleDrag}
@@ -914,7 +926,7 @@ const FloatingPromptInputInner = (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Model:</span>
+                    <span className="text-xs text-muted-foreground">{t('floatingPrompt.model')}</span>
                     <Popover
                       trigger={
                         <Button
@@ -967,7 +979,7 @@ const FloatingPromptInputInner = (
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Thinking:</span>
+                    <span className="text-xs text-muted-foreground">{t('floatingPrompt.thinking')}</span>
                     <Popover
                       trigger={
                         <Tooltip>
@@ -1031,7 +1043,7 @@ const FloatingPromptInputInner = (
                   </div>
                 </div>
 
-                <TooltipSimple content="Send message" side="top">
+                <TooltipSimple content={t('floatingPrompt.sendMessage')} side="top">
                   <motion.div
                     whileTap={{ scale: 0.97 }}
                     transition={{ duration: 0.15 }}
@@ -1229,8 +1241,8 @@ const FloatingPromptInputInner = (
                   onPaste={handlePaste}
                   placeholder={
                     dragActive
-                      ? "Drop images here..."
-                      : "Message Claude (@ for files, / for commands)..."
+                      ? t('floatingPrompt.dropImagesHere')
+                      : t('floatingPrompt.messagePlaceholder')
                   }
                   disabled={disabled}
                   className={cn(
@@ -1246,7 +1258,7 @@ const FloatingPromptInputInner = (
 
                 {/* Action buttons inside input - fixed at bottom right */}
                 <div className="absolute right-1.5 bottom-1.5 flex items-center gap-0.5">
-                  <TooltipSimple content="Expand (Ctrl+Shift+E)" side="top">
+                  <TooltipSimple content={t('floatingPrompt.expandTooltip')} side="top">
                     <motion.div
                       whileTap={{ scale: 0.97 }}
                       transition={{ duration: 0.15 }}
@@ -1263,7 +1275,7 @@ const FloatingPromptInputInner = (
                     </motion.div>
                   </TooltipSimple>
 
-                  <TooltipSimple content={isLoading ? "Stop generation" : "Send message (Enter)"} side="top">
+                  <TooltipSimple content={isLoading ? t('floatingPrompt.stopGeneration') : t('floatingPrompt.sendMessage')} side="top">
                     <motion.div
                       whileTap={{ scale: 0.97 }}
                       transition={{ duration: 0.15 }}

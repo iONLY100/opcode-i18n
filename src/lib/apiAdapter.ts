@@ -133,14 +133,17 @@ async function restApiCall<T>(endpoint: string, params?: any): Promise<T> {
  */
 export async function apiCall<T>(command: string, params?: any): Promise<T> {
   const isWeb = !detectEnvironment();
-  
+  console.log(`[apiCall] command: ${command}, isWeb: ${isWeb}`);
+
   if (!isWeb) {
     // Tauri environment - try invoke
     console.log(`[Tauri] Calling: ${command}`, params);
     try {
-      return await invoke<T>(command, params);
+      const result = await invoke<T>(command, params);
+      console.log(`[Tauri] invoke succeeded for: ${command}`);
+      return result;
     } catch (error) {
-      console.warn(`[Tauri] invoke failed, falling back to web mode:`, error);
+      console.error(`[Tauri] invoke failed for ${command}, falling back to web mode:`, error);
       // Fall through to web mode
     }
   }
