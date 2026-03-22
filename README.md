@@ -1,4 +1,11 @@
 
+---
+## 🌐 Language / 语言
+
+**[English (English)](README.md)** | **[简体中文 (Chinese)](README_zh-CN.md)**
+
+---
+
 <div align="center">
   <img src="src-tauri/icons/icon.png" alt="opcode Logo" width="120" height="120">
 
@@ -33,9 +40,6 @@ https://github.com/user-attachments/assets/6bceea0f-60b6-4c3e-a745-b891de00b8d0
 
 > [!NOTE]
 > This project is not affiliated with, endorsed by, or sponsored by Anthropic. Claude is a trademark of Anthropic, PBC. This is an independent developer project using Claude.
-
-> [!IMPORTANT]
-> 🌐 **Internationalization (i18n) is now supported!** This project supports multiple languages including English and Simplified Chinese (zh-CN). [Switch to Chinese (简体中文)](README_zh-CN.md)
 
 ## 🌟 Overview
 
