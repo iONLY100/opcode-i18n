@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
+import {
   Copy,
   ChevronDown,
   GitBranch,
@@ -15,38 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Popover } from "@/components/ui/popover";
 import { api, type Session } from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-// Conditional imports for Tauri APIs
-let tauriListen: any;
-type UnlistenFn = () => void;
-
-try {
-  if (typeof window !== 'undefined' && window.__TAURI__) {
-    tauriListen = require("@tauri-apps/api/event").listen;
-  }
-} catch (e) {
-  console.log('[ClaudeCodeSession] Tauri APIs not available, using web mode');
-}
-
-// Web-compatible replacements
-const listen = tauriListen || ((eventName: string, callback: (event: any) => void) => {
-  console.log('[ClaudeCodeSession] Setting up DOM event listener for:', eventName);
-
-  // In web mode, listen for DOM events
-  const domEventHandler = (event: any) => {
-    console.log('[ClaudeCodeSession] DOM event received:', eventName, event.detail);
-    // Simulate Tauri event structure
-    callback({ payload: event.detail });
-  };
-
-  window.addEventListener(eventName, domEventHandler);
-
-  // Return unlisten function
-  return Promise.resolve(() => {
-    console.log('[ClaudeCodeSession] Removing DOM event listener for:', eventName);
-    window.removeEventListener(eventName, domEventHandler);
-  });
-});
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { StreamMessage } from "./StreamMessage";
 import { FloatingPromptInput, type FloatingPromptInputRef } from "./FloatingPromptInput";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -146,7 +115,22 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
   const isListeningRef = useRef(false);
   const sessionStartTime = useRef<number>(Date.now());
   const isIMEComposingRef = useRef(false);
-  
+
+  // Refs for processComplete to ensure it always accesses current values
+  // Note: These are initialized without values and updated via useEffect after effectiveSession/claudeSessionId are declared
+  const effectiveSessionRef = useRef<typeof effectiveSession | null>(null);
+  const claudeSessionIdRef = useRef<string | null>(null);
+  const promptRef = useRef<string>('');
+  const totalTokensRef = useRef<number>(0);
+
+  // Stable ref to the latest processComplete function
+  const processCompleteRef = useRef<(success: boolean) => void>(() => {
+    console.error('[ClaudeCodeSession] processComplete called but not yet initialized');
+  });
+
+  // Note: effectiveSessionRef and claudeSessionIdRef are updated in handleSendPrompt
+  // before calling the API, so they don't need useEffect sync
+
   // Session metrics state for enhanced analytics
   const sessionMetrics = useRef({
     firstMessageTime: null as number | null,
@@ -510,7 +494,13 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
       setIsLoading(true);
       setError(null);
       hasActiveSessionRef.current = true;
-      
+
+      // Update refs before any async operations to ensure processComplete uses current values
+      effectiveSessionRef.current = effectiveSession;
+      claudeSessionIdRef.current = claudeSessionId;
+      promptRef.current = prompt;
+      totalTokensRef.current = totalTokens;
+
       // For resuming sessions, ensure we have the session ID
       if (effectiveSession && !claudeSessionId) {
         setClaudeSessionId(effectiveSession.id);
@@ -557,7 +547,7 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
 
           const specificCompleteUnlisten = await listen(`claude-complete:${sid}`, (evt: any) => {
             console.log('[ClaudeCodeSession] Received claude-complete (scoped):', evt.payload);
-            processComplete(evt.payload);
+            processCompleteRef.current(evt.payload);
           });
 
           // Replace existing unlisten refs with these new ones (after cleaning up)
@@ -699,35 +689,39 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
         }
 
         // Helper to handle completion events (both generic and scoped)
+        // Uses refs to ensure it always accesses current values
         const processComplete = async (success: boolean) => {
           setIsLoading(false);
           hasActiveSessionRef.current = false;
           isListeningRef.current = false; // Reset listening state
-          
+
           // Track enhanced session stopped metrics when session completes
-          if (effectiveSession && claudeSessionId) {
+          // Use refs to ensure we have current values
+          const currentEffectiveSession = effectiveSessionRef.current;
+          const currentClaudeSessionId = claudeSessionIdRef.current;
+          if (currentEffectiveSession && currentClaudeSessionId) {
             const sessionStartTimeValue = messages.length > 0 ? messages[0].timestamp || Date.now() : Date.now();
             const duration = Date.now() - sessionStartTimeValue;
             const metrics = sessionMetrics.current;
-            const timeToFirstMessage = metrics.firstMessageTime 
-              ? metrics.firstMessageTime - sessionStartTime.current 
+            const timeToFirstMessage = metrics.firstMessageTime
+              ? metrics.firstMessageTime - sessionStartTime.current
               : undefined;
             const idleTime = Date.now() - metrics.lastActivityTime;
             const avgResponseTime = metrics.toolExecutionTimes.length > 0
               ? metrics.toolExecutionTimes.reduce((a, b) => a + b, 0) / metrics.toolExecutionTimes.length
               : undefined;
-            
+
             trackEvent.enhancedSessionStopped({
               // Basic metrics
               duration_ms: duration,
               messages_count: messages.length,
               reason: success ? 'completed' : 'error',
-              
+
               // Timing metrics
               time_to_first_message_ms: timeToFirstMessage,
               average_response_time_ms: avgResponseTime,
               idle_time_ms: idleTime,
-              
+
               // Interaction metrics
               prompts_sent: metrics.promptsSent,
               tools_executed: metrics.toolsExecuted,
@@ -735,25 +729,25 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
               files_created: metrics.filesCreated,
               files_modified: metrics.filesModified,
               files_deleted: metrics.filesDeleted,
-              
+
               // Content metrics
-              total_tokens_used: totalTokens,
+              total_tokens_used: totalTokensRef.current,
               code_blocks_generated: metrics.codeBlocksGenerated,
               errors_encountered: metrics.errorsEncountered,
-              
+
               // Session context
-              model: metrics.modelChanges.length > 0 
-                ? metrics.modelChanges[metrics.modelChanges.length - 1].to 
+              model: metrics.modelChanges.length > 0
+                ? metrics.modelChanges[metrics.modelChanges.length - 1].to
                 : 'sonnet',
               has_checkpoints: metrics.checkpointCount > 0,
               checkpoint_count: metrics.checkpointCount,
               was_resumed: metrics.wasResumed,
-              
+
               // Agent context (if applicable)
               agent_type: undefined, // TODO: Pass from agent execution
               agent_name: undefined, // TODO: Pass from agent execution
               agent_success: success,
-              
+
               // Stop context
               stop_source: 'completed',
               final_state: success ? 'success' : 'failed',
@@ -762,20 +756,20 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
             });
           }
 
-          if (effectiveSession && success) {
+          if (currentEffectiveSession && success) {
             try {
               const settings = await api.getCheckpointSettings(
-                effectiveSession.id,
-                effectiveSession.project_id,
+                currentEffectiveSession.id,
+                currentEffectiveSession.project_id,
                 projectPath
               );
 
               if (settings.auto_checkpoint_enabled) {
                 await api.checkAutoCheckpoint(
-                  effectiveSession.id,
-                  effectiveSession.project_id,
+                  currentEffectiveSession.id,
+                  currentEffectiveSession.project_id,
                   projectPath,
-                  prompt
+                  promptRef.current
                 );
                 // Reload timeline to show new checkpoint
                 setTimelineVersion((v) => v + 1);
@@ -789,13 +783,16 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
           if (queuedPromptsRef.current.length > 0) {
             const [nextPrompt, ...remainingPrompts] = queuedPromptsRef.current;
             setQueuedPrompts(remainingPrompts);
-            
+
             // Small delay to ensure UI updates
             setTimeout(() => {
               handleSendPrompt(nextPrompt.prompt, nextPrompt.model);
             }, 100);
           }
         };
+
+        // Update the ref to point to the latest processComplete
+        processCompleteRef.current = processComplete;
 
         const genericErrorUnlisten = await listen('claude-error', (evt: any) => {
           console.error('Claude error:', evt.payload);
@@ -804,7 +801,7 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
 
         const genericCompleteUnlisten = await listen('claude-complete', (evt: any) => {
           console.log('[ClaudeCodeSession] Received claude-complete (generic):', evt.payload);
-          processComplete(evt.payload);
+          processCompleteRef.current(evt.payload);
         });
 
         // Store the generic unlisteners for now; they may be replaced later.

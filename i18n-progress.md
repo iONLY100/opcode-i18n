@@ -13,16 +13,16 @@
 |------|------|------|
 | `Settings.tsx` | ✅ 完成 | 主题、颜色、权限、环境变量、钩子等 |
 | `LanguageSwitcher.tsx` | ✅ 完成 | 修复了 Popover API 问题 |
-| `CCAgents.tsx` | ✅ 完成 | 头部、空状态、卡片操作、分页、删除对话框 |
+| `CCAgents.tsx` | ✅ 完成 | 头部，空状态、卡片操作、分页、删除对话框 |
 | `MCPManager.tsx` | ✅ 完成 | 头部标题/副标题、标签页名称、toast 消息 |
-| `MCPServerList.tsx` | ✅ 完成 | 作用域显示、状态徽章、空状态 |
+| `MCPServerList.tsx` | ✅ 完成 | 作用域显示、状态徽章，空状态 |
 | `MCPAddServer.tsx` | ✅ 完成 | 表单标签、按钮文本、错误消息、作用域选项 |
 | `MCPImportExport.tsx` | ✅ 完成 | 所有 UI 文本翻译键 |
 | `CreateAgent.tsx` | ✅ 完成 | 头部、表单标签、模型描述 |
 | `AgentExecution.tsx` | ✅ 完成 | 执行状态、模型选择、全屏模式、复制输出、钩子配置 |
 | `HooksEditor.tsx` | ✅ 完成 | 加载状态、配置标题、验证错误、模板对话框 |
 | `SlashCommandsManager.tsx` | ✅ 完成 | 命令列表、编辑对话框、删除确认 |
-| `UsageDashboard.tsx` | ⚠️ 部分 | 头部、标签页、概览部分 |
+| `UsageDashboard.tsx` | ✅ 完成 | 头部、标签页、概览部分 |
 
 ### 2. 语言包更新
 
@@ -65,62 +65,81 @@
 #### `src/locales/zh-CN.json` - 对应中文翻译:
 - 所有上述键均有对应的简体中文翻译
 
-### 3. 构建状态
+### 3. 关键 Bug 修复
+
+#### i18next v23+ 插值格式修复
+
+**问题描述:**
+i18next v23+ 更改了默认插值格式从 `{name}` 到 `{{name}}`，导致所有翻译中的变量插值不生效，显示为字面量 `{input}`、`{output}`、`{count}` 等。
+
+**修复方案:**
+更新 `src/locales/en.json` 和 `src/locales/zh-CN.json` 中所有插值变量为双括号格式 `{{varName}}`。
+
+**修改的键 (部分列表):**
+- `tokensUsage`: `{input}` → `{{input}}`, `{output}` → `{{output}}`
+- `agentsTab`: `{count}` → `{{count}}`
+- `agentsTabLabel`: `{count}` → `{{count}}`
+- `historyTab`: `{count}` → `{{count}}`
+- `historyTabLabel`: `{count}` → `{{count}}`
+- 等等...
+
+#### StreamMessage.tsx Usage 检查修复
+
+**问题描述:**
+Token 用量检查只检查了 `message.message.usage`（嵌套位置），但后端有时会将 usage 放在 `message.usage`（顶层位置）。
+
+**修复方案:**
+同时检查两个位置的 usage 数据，并正确处理空值情况。
+
+```tsx
+{((msg.usage?.input_tokens != null || msg.usage?.output_tokens != null) || (message.usage?.input_tokens != null || message.usage?.output_tokens != null)) && (
+  <div>
+    {t('streamMessage.tokensUsage', {
+      input: msg.usage?.input_tokens ?? message.usage?.input_tokens,
+      output: msg.usage?.output_tokens ?? message.usage?.output_tokens
+    })}
+  </div>
+)}
+```
+
+### 4. 构建状态
 - ✅ TypeScript 编译通过
 - ✅ Vite 生产构建通过 (`npm run build`)
+- ✅ Tauri 构建通过 (`bun run tauri build`)
+- ✅ Windows 安装包生成成功
 
-### 4. 待完成的工作
+### 5. 提交记录
 
-#### 组件 (仍有硬编码字符串):
-- `UsageDashboard.tsx` - 剩余部分 (Models、Projects、Sessions、Timeline 标签页)
-- `ProjectList.tsx`
-- `SessionList.tsx`
-- `FilePicker.tsx`
-- `NFOCredits.tsx`
-- `Agents.tsx`
-- `RunningClaudeSessions.tsx`
-- `ClaudeCodeSession.tsx`
-- `StreamMessage.tsx`
-- 其他 UI 组件
-
-#### 语言包键 (可能缺失):
-- 部分翻译键需要确认是否已存在于语言包中
+| Commit | 描述 |
+|--------|------|
+| `b66592e` | fix(i18n): update interpolation syntax to {{}} format for i18next v23+ |
+| `3de7d09` | docs: move language switcher to top of README for better visibility |
 
 ## 技术说明
 
 ### i18n 规范
 - 使用 `react-i18next` 的 `useTranslation` hook
 - 翻译键格式: `模块.子模块.键名` (如 `agents.createNewAgent`)
+- **重要**: i18next v23+ 使用 `{{variable}}` 格式进行变量插值
 - 支持变量插值: `t('key', { variable: value })`
 
 ### 项目结构
 - 语言包位置: `src/locales/en.json`, `src/locales/zh-CN.json`
 - 组件位置: `src/components/*.tsx`
-
-## 下一步
-
-1. 继续完成 `UsageDashboard.tsx` 剩余部分的 i18n 重构
-2. 完成剩余组件的国际化重构
-3. 安装 Rust 工具链以构建 Windows 包 (`npm run tauri build`)
-4. 测试中英文切换功能
+- i18n 配置: `src/lib/i18n.ts`
 
 ## 构建命令
 
 ```bash
-# Web 构建 (已通过)
+# Web 前端构建
 npm run build
 
-# Tauri Windows 包 (需要安装 Rust)
-npm run tauri build
-```
+# Tauri 开发模式
+bun run tauri dev
 
-## 安装 Rust
-
-访问 https://rustup.rs 下载安装，或运行:
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$TEMP/rustup-init.exe" && "$TEMP/rustup-init.exe" -y
+# Tauri 生产构建
+bun run tauri build
 ```
 
 ---
-
-生成时间: 2026-03-22
+最后更新: 2026-03-22
