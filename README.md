@@ -34,6 +34,9 @@ https://github.com/user-attachments/assets/6bceea0f-60b6-4c3e-a745-b891de00b8d0
 > [!NOTE]
 > This project is not affiliated with, endorsed by, or sponsored by Anthropic. Claude is a trademark of Anthropic, PBC. This is an independent developer project using Claude.
 
+> [!IMPORTANT]
+> 🌐 **Internationalization (i18n) is now supported!** This project supports multiple languages including English and Simplified Chinese (zh-CN). [Switch to Chinese (简体中文)](README_zh-CN.md)
+
 ## 🌟 Overview
 
 **opcode** is a powerful desktop application that transforms how you interact with Claude Code. Built with Tauri 2, it provides a beautiful GUI for managing your Claude Code sessions, creating custom agents, tracking usage, and much more.
